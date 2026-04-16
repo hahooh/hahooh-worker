@@ -1,0 +1,16 @@
+services:
+  agent:
+    build: .
+    container_name: gemini-coding-worker
+    volumes:
+      # Use variables for host paths: ${HOST_DATA_PATH}:${CONTAINER_PATH}
+      - ${HOST_SHARED_DIR:-./shared}:/shared
+      - ${HOST_WORKSPACE_DIR:-./shared/workspace}:/app/workspace
+    env_file:
+      - .env
+    environment:
+      - GIT_PAT=${GITHUB_PAT}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - WORKSPACE_DIR=/app/workspace
+      - TODO_PATH=/shared/todo.json
+      - OUTPUT_PATH=/shared/output.json
