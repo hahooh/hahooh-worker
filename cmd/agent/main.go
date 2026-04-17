@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -23,38 +25,60 @@ type Result struct {
 	Success   bool      `json:"success"`
 }
 
-func main() {
-	todoPath := os.Getenv("TODO_PATH")
-	outputPath := os.Getenv("OUTPUT_PATH")
+const (
+	todoPath     = "/shared/todo.json"
+	outputPath   = "/shared/output.json"
+	workspaceDir = "/app/workspace"
+)
 
+func main() {
 	fmt.Println("Agent Runner started. Watching", todoPath)
+	setupGit()
 
 	for {
 		// 1. Read tasks from todo.json
-		data, _ := os.ReadFile(todoPath)
+		data, err := os.ReadFile(todoPath)
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
 		var tasks []Task
 		json.Unmarshal(data, &tasks)
 
 		if len(tasks) > 0 {
 			current := tasks[0]
-			fmt.Printf("Processing Task: %s\n", current.ID)
 
-			// 2. Execute Gemini CLI and capture output
-			// Using CombinedOutput to get both Stdout and Stderr for the log
-			fmt.Printf("Running: gemini --yolo -p %s\n", current.Query)
-			cmd := exec.Command("gemini", "--yolo", "-p", current.Query)
-			rawOutput, err := cmd.CombinedOutput()
+			// 4. Update todo.json (Remove the completed task)
+			remaining := tasks[1:]
+			newData, _ := json.MarshalIndent(remaining, "", "  ")
+			os.WriteFile(todoPath, newData, 0644)
+
+			fmt.Printf("\n--- Processing Task: %s ---\n", current.ID)
+
+			// 2. Setup Real-time Output + Buffer
+			var buf bytes.Buffer
+			// MultiWriter sends output to the Docker logs (Stdout) AND our buffer
+			multiWriter := io.MultiWriter(os.Stdout, &buf)
+
+			cmd := exec.Command("gemini", "--yolo", "-p", "Task: "+current.Query)
+			cmd.Stdout = multiWriter
+			cmd.Stderr = multiWriter
+
+			// Start the execution
+			err := cmd.Run()
+			rawOutput := buf.Bytes()
 
 			success := true
 			if err != nil {
-				fmt.Printf("Task %s failed: %v\n", current.ID, err)
+				fmt.Printf("\nTask %s failed: %v\n", current.ID, err)
 				success = false
 			}
 
 			var diffOutput []byte
 			if success {
-				// 1. Capture the diff
-				diffCmd := exec.Command("git", "-C", os.Getenv("WORKSPACE_DIR"), "diff")
+				// Capture the diff using the constant workspaceDir
+				diffCmd := exec.Command("git", "-C", workspaceDir, "diff")
 				diffOutput, _ = diffCmd.Output()
 			}
 
@@ -68,31 +92,31 @@ func main() {
 				Success:   success,
 			})
 
-			// 4. Update todo.json (Remove the completed task)
-			remaining := tasks[1:]
-			newData, _ := json.MarshalIndent(remaining, "", "  ")
-			os.WriteFile(todoPath, newData, 0644)
-
-			fmt.Printf("Task %s complete. Results written to %s\n", current.ID, outputPath)
+			fmt.Printf("\n--- Task %s Complete ---\n", current.ID)
 		}
 
 		time.Sleep(5 * time.Second)
 	}
 }
 
+func setupGit() {
+	exec.Command("git", "config", "--global", "--add", "safe.directory", "/app").Run()
+	exec.Command("git", "config", "--global", "--add", "safe.directory", workspaceDir).Run()
+
+	pat := os.Getenv("GITHUB_PAT")
+	if pat != "" {
+		authUrl := fmt.Sprintf("https://%s@github.com/", pat)
+		exec.Command("git", "config", "--global", "url."+authUrl+".insteadOf", "https://github.com/").Run()
+	}
+}
+
 func recordResult(path string, res Result) {
 	var results []Result
-
-	// Read existing results
 	data, err := os.ReadFile(path)
 	if err == nil {
 		json.Unmarshal(data, &results)
 	}
-
-	// Append new result
 	results = append(results, res)
-
-	// Write back to file
 	newData, _ := json.MarshalIndent(results, "", "  ")
 	os.WriteFile(path, newData, 0644)
 }

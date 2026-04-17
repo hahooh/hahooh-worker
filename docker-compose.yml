@@ -9,8 +9,5 @@ services:
     env_file:
       - .env
     environment:
-      - GIT_PAT=${GITHUB_PAT}
+      - GITHUB_PAT=${GITHUB_PAT}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - WORKSPACE_DIR=/app/workspace
-      - TODO_PATH=/shared/todo.json
-      - OUTPUT_PATH=/shared/output.json
