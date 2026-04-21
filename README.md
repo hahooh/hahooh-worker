@@ -34,6 +34,9 @@ hahooh-worker is a minimalist, Unix-style background agent designed for autonomo
 
 - Context: Markdown-driven memory via .gemini/GEMINI.md
 
+## ⚠️ Security Warning Note
+- This agent is designed for local use. Never give it a PAT with more permissions than it needs, and always review the output.json before merging changes to your main branch.
+
 ## 🚀 Quick Start
 
 ```bash
