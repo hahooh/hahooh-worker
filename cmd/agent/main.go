@@ -39,19 +39,29 @@ func main() {
 		// 1. Read tasks from todo.json
 		data, err := os.ReadFile(todoPath)
 		if err != nil {
+			fmt.Printf("Error reading todo.json: %v\n", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
 		var tasks []Task
-		json.Unmarshal(data, &tasks)
+		if err := json.Unmarshal(data, &tasks); err != nil {
+			fmt.Printf("Error parsing todo.json: %v\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
 		if len(tasks) > 0 {
 			current := tasks[0]
 
 			// 4. Update todo.json (Remove the completed task)
 			remaining := tasks[1:]
-			newData, _ := json.MarshalIndent(remaining, "", "  ")
+			newData, err := json.MarshalIndent(remaining, "", "  ")
+			if err != nil {
+				fmt.Printf("Error updating todo.json: %v\n", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
 			os.WriteFile(todoPath, newData, 0644)
 
 			fmt.Printf("\n--- Processing Task: %s ---\n", current.ID)
@@ -66,7 +76,10 @@ func main() {
 			cmd.Stderr = multiWriter
 
 			// Start the execution
-			err := cmd.Run()
+			if err = cmd.Run(); err != nil {
+				fmt.Printf("\nError executing command: %v\n", err)
+				buf.WriteString(fmt.Sprintf("\nError: %v", err))
+			}
 			rawOutput := buf.Bytes()
 
 			success := true
@@ -100,6 +113,7 @@ func main() {
 }
 
 func setupGit() {
+	fmt.Println("setup git")
 	exec.Command("git", "config", "--global", "--add", "safe.directory", "/app").Run()
 	exec.Command("git", "config", "--global", "--add", "safe.directory", workspaceDir).Run()
 
