@@ -127,10 +127,21 @@ func setupGit() {
 func recordResult(path string, res Result) {
 	var results []Result
 	data, err := os.ReadFile(path)
-	if err == nil {
-		json.Unmarshal(data, &results)
+	if err != nil {
+		fmt.Printf("Error reading output.json: %v\n", err)
+		return
+	}
+	if err := json.Unmarshal(data, &results); err != nil {
+		fmt.Printf("Error parsing output.json: %v\n", err)
+		return
 	}
 	results = append(results, res)
-	newData, _ := json.MarshalIndent(results, "", "  ")
-	os.WriteFile(path, newData, 0644)
+	newData, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		fmt.Printf("Error marshaling results: %v\n", err)
+		return
+	}
+	if err = os.WriteFile(path, newData, 0644); err != nil {
+		fmt.Printf("Error writing output.json: %v\n", err)
+	}
 }
